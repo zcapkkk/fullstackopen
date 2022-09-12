@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
+import personService from './services/persons'
 
-const Numbers = ({ person, keyvalue }) =>  <p key={keyvalue}>{person.name} {person.number}</p>
+const Numbers = ({ person, deleteFunc }) =>  <p>{person.name} {person.number} <button onClick={()=>deleteFunc(person)}>delete</button></p>
 
 const Filter = ({ filterchange, filtervalue }) => {
   // some logic
@@ -24,6 +24,28 @@ const Persons = ({ submit, name, number, namechange, numberchange }) => {
   </div>
   )}
   
+const Notification = ({ message,color }) => {
+  const msg_style = {
+    color: color,
+    fontStyle: 'italic',
+    fontSize: 20,
+    background: 'lightgrey',
+    padding: 10,
+    marginBottom: 10,
+    borderStyle: 'solid',
+    borderRadius: 2
+  }
+
+  if (message === null) {
+    return null 
+  }
+
+  return (
+    <div style={msg_style}>
+      {message}
+    </div>
+  )
+}
 
 const App = () => {
   const [persons, setPersons] = useState([])
@@ -31,16 +53,14 @@ const App = () => {
   const [newNumber, setNewNumber] = useState('')
   const [filtered_persons, setNewFilter] = useState(persons)
   const [newValue, setNewValue] = useState('')
+  const [message, setMessage] = useState(null)
+  const [color, setColor] = useState('green')
 
   useEffect(()=>{
-    console.log("effect")
-    axios
-      .get('http://localhost:3001/persons')
-      .then(response => {
-        console.log("promise fulfileed")
-        setPersons(response.data)
-        setNewFilter(response.data)
-        console.log(response.data)
+    personService.getAll()
+      .then(personList => {
+        setPersons(personList)
+        setNewFilter(personList)
       })
   },[]) 
 
@@ -64,39 +84,88 @@ const App = () => {
     setNewFilter(filtered_list)
   }
 
+  const deletePerson = person => {
+    window.confirm(`Do you want to delete ${person.name}?`)
+      ?personService.deletePerson(person.id)
+      :console.log("alright then")
+    // not sure whether to 
+    // remove person in front-end
+    // or from back-end (fetch full list again)
+    // front-end seems more elegant so here we go
+    const newPersonsList = persons.filter(element => element !== person)
+    setPersons(newPersonsList)
+    setNewFilter(newPersonsList)
+  }
+     
+
   const addPerson = (event) => {
     event.preventDefault()
     const namecheck = []
     persons.map(person => namecheck.push(person.name))
     console.log(namecheck)
     const checking = namecheck.find(element => element === newName)
-    if (checking) {
-      console.log("Clash")
-      alert(`${newName} is already added to phonebook`)
+    const ogPerson = persons.find(element => element.name === newName)
+    console.log(ogPerson)
+    const updatePerson = {...ogPerson, number: newNumber}
+    if (checking) {    
+      window.confirm(`${newName} is already added to phonebook, replace old number with new one?`)
+        ?personService.editPerson(ogPerson.id, updatePerson)
+        .then(()=> {
+          //setPersons(persons.map(person => person===ogPerson?updatePerson:person))
+          //setNewFilter(persons.map(person => person===ogPerson?updatePerson:person))
+          personService.getAll().then(personlist => {
+            setPersons(personlist)
+            setNewFilter(personlist)
+          })
+          setMessage(`${ogPerson.name} has been modified`)
+          setColor('green')
+          setTimeout(()=>{setMessage(null)},3000)
+        })
+        .catch(error => {
+          setMessage(`${ogPerson.name} has been deleted from server`)
+          setColor('red')
+          setTimeout(()=>{setMessage(null)},3000)
+          personService.getAll().then(personlist => {
+            setPersons(personlist)
+            setNewFilter(personlist)
+          })
+        })
+        :console.log("alright then")
       setNewName('')
       setNewNumber('')
-    }
+      }
     else {
-      const newObj = {name: newName, number: newNumber, id: persons.length+1}
-      setPersons(persons.concat(newObj))
-      setNewFilter(persons.concat(newObj))
+      const newObj = {name: newName, number: newNumber}
+      const response = personService.create(newObj)
+      console.log(response)
+      personService.getAll().then(personlist => {
+        setPersons(personlist)
+        setNewFilter(personlist)
+        })
+      //setPersons(persons.concat(newObj))
+      //setNewFilter(persons.concat(newObj))
       console.log(persons)
       setNewName('')
       setNewNumber('')
       setNewValue('')
+      setMessage(`${newObj.name} has been added`)
+      setColor('green')
+      setTimeout(()=>{setMessage(null)},3000)
+
     }
   }
 
     
   return (
     <div>
+      <Notification message={message} color={color} />
       <h2>Phonebook</h2>
       <Filter filterchange={handleFilterChange} filtervalue={newValue}/>
       <h2>Add a new </h2>
       <Persons submit={addPerson} name={newName} number={newNumber} namechange={handleNameChange} numberchange={handleNumberChange}/>
       <h2>Numbers</h2>
       <div>
-        {filtered_persons.map(person => <Numbers key={person.id.toString()} person={person} />)}
+        {filtered_persons.map(person => <Numbers key={person.id} person={person} deleteFunc={deletePerson} />)}
       </div>
     </div>
   )
