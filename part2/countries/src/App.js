@@ -25,7 +25,11 @@ const FilteredCountry = ({ name, onclickfunc  }) => {
    )}
 }
 
-const CountryProfile = ({ country }) => {
+const CountryProfile = ({ country, weather }) => { 
+  const add_info = weather.weather
+  const icon_str = add_info?add_info[0].icon:'02d'
+  const weather_str = `https://openweathermap.org/img/wn/${icon_str}@2x.png`
+  if (country !== null && Object.entries(weather).length !== 0) {
   return(
       <div>
         <h2>{country.name.official}</h2>
@@ -36,30 +40,42 @@ const CountryProfile = ({ country }) => {
               {Object.entries(country.languages).map((language,index) => <li key={index}><b>{language[0]}</b>: {language[1]} </li>)}
             </ul>
           <img src={ country.flags.png } alt="flag"/>
+          <h2> Weather in {country.capital} </h2>
+          <p>Temperature: {weather.main.temp}  Celcius</p>
+        <img src={weather_str} alt="icon"/>
+          <p>Wind: {weather.wind.speed}  m/s</p>
       </div> 
     )
   }
-
-const Weather = ({ country }) => {
-  return(
-    <div>
-      <h2> Weather in {country} </h2>
-      <p>Temperature: x Celcius</p>
-      <p>icon</p>
-      <p>Wind: x m/s</p>
-    </div> 
-  )
-}
-
+  else if (Object.entries(weather).length !== 0) {
+    return(
+  <div>
+          <h2>{country.name.official}</h2>
+          <p> Capital: {country.capital} </p>
+          <p> Area: {country.area} </p>
+          <h3>Languages</h3>
+            <ul>
+              {Object.entries(country.languages).map((language,index) => <li key={index}><b>{language[0]}</b>: {language[1]} </li>)}
+            </ul>
+          <img src={ country.flags.png } alt="flag"/>
+    <p>No weather information available</p>
+  </div>
+    )}  
+  else {
+    return(<div></div>)
+  }
+  }
 
 
 const App = () => {
   
+  const api_key = process.env.REACT_APP_API_KEY
   const [country, newCountry] = useState('')
   const [fullCountryList, newFullCountryList] = useState([])
   const [countrylist, newCountryList] = useState([])
   const [countryprofile, newCountryProfile] = useState(null)
   const [listShow, toggleListShow] = useState(true)
+  const [weather, newWeather] = useState({})
   
   const hook = () => {
     axios.get('https://restcountries.com/v3.1/all')
@@ -69,6 +85,19 @@ const App = () => {
   }
 
   useEffect(hook, [])
+  
+  const weather_hook = (countryprofile, api_key)=>{
+    if (countryprofile !== null) {
+      const [lat, lng] = countryprofile.capitalInfo.latlng
+      axios.get(` https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${api_key}&units=metric`)
+      .then(response =>{
+        console.log(response.data)
+        newWeather(response.data)
+      })
+    }
+  }
+
+  useEffect(()=>weather_hook(countryprofile, api_key), [countryprofile,api_key])
 
   const filter_logic = (country_list) => {
     if (country_list.length > 10) {
@@ -89,18 +118,17 @@ const App = () => {
     }
     else {
       console.log("No countries matched")
-      newCountryProfile(null)
       toggleListShow(false)
     }
   }
   
   const country_name_list = fullCountryList.map(country => country.name.common)
   const handleChange = (event) => {
-  newCountry(event.target.value)
-  const filter = event.target.value.toLowerCase()
-  const filtered_list = country_name_list.filter(country=> country.toLowerCase().match(filter)!=null)
-  console.log(filtered_list)
-  filter_logic(filtered_list)
+    newCountry(event.target.value)
+    const filter = event.target.value.toLowerCase()
+    const filtered_list = country_name_list.filter(country=> country.toLowerCase().match(filter)!=null)
+    console.log(filtered_list)
+    filter_logic(filtered_list)
   }
 
   const handleCountry = (name) => {
@@ -124,7 +152,7 @@ const App = () => {
         <input onChange={handleChange} value={country}/>
         {listShow?
         countrylist.map((country, index) => <FilteredCountry key={index} name={country} handleCountry={handleCountry} onclickfunc={selectCountryProfile}  />)
-        :<div> <CountryProfile country={countryprofile}/><Weather country={country}/> </div>}
+        :<CountryProfile country={countryprofile} weather={weather}/>}
       </div>
     );
   }
